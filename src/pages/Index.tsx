@@ -13,8 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { useGoogleSheets } from '@/hooks/useGoogleSheets';
 import type { FormSubmissionData } from '@/types';
+import { useRequest } from 'ahooks';
 
 export function IndexPage() {
   const { t } = useTranslation();
@@ -22,18 +22,29 @@ export function IndexPage() {
   const [walletAddress, setWalletAddress] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  // const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
-  const spreadsheetId = import.meta.env.VITE_GOOGLE_SHEETS_SPREADSHEET_ID || '';
-  const sheetName = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_NAME || 'Sheet1';
+  const { loading, data: isSubmitted, run: appendData, error } = useRequest(async (values: FormSubmissionData) => {
+    const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
+    if(!scriptUrl) {
+      throw new Error('Google Sheets script URL is not defined.');
+    }
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify(values),
+    });
 
-  const { loading, appendData, error: googleSheetsError } = useGoogleSheets(
-    apiKey,
-    spreadsheetId
-  );
+    if (!response.ok) {
+      console.log(response);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return true
+
+  }, { manual: true })
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -53,48 +64,15 @@ export function IndexPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    setSuccessMessage('');
-    setErrorMessage('');
-
     if (!validateForm()) {
       return;
     }
 
-    if (!apiKey || !spreadsheetId) {
-      setErrorMessage(
-        'Google Sheets API key and Spreadsheet ID are not configured. Please set up your environment variables.'
-      );
-      return;
-    }
-
-    try {
-      const timestamp = new Date().toISOString();
-      const submissionData: FormSubmissionData = {
-        service,
-        walletAddress,
-        additionalNotes,
-        timestamp,
-      };
-
-      const range = `${sheetName}!A1`;
-      await appendData(range, [
-        submissionData.service,
-        submissionData.walletAddress,
-        submissionData.additionalNotes,
-        submissionData.timestamp,
-      ]);
-
-      setSuccessMessage(t('form.submit.success'));
-      setIsSubmitted(true);
-
-      setService('');
-      setWalletAddress('');
-      setAdditionalNotes('');
-      setErrors({});
-    } catch (err) {
-      setErrorMessage(t('form.submit.error'));
-      console.error('Form submission error:', err);
-    }
+    appendData({
+      service,
+      walletAddress,
+      additionalNotes,
+    });
   };
 
   return (
@@ -128,98 +106,82 @@ export function IndexPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="service">
-                  {t('form.service.label')} <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={service}
-                  onValueChange={setService}
-                  disabled={loading}
-                >
-                  <SelectTrigger
-                    id="service"
-                    className={errors.service ? 'border-red-500' : ''}
+                <div className="space-y-2">
+                  <Label htmlFor="service">
+                    {t('form.service.label')} <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={service}
+                    onValueChange={setService}
+                    disabled={loading}
                   >
-                    <SelectValue placeholder={t('form.service.placeholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="force_bridge">
-                      {t('form.service.forceBridge')}
-                    </SelectItem>
-                    <SelectItem value="godwoken">
-                      {t('form.service.godwoken')}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.service && (
-                  <p className="text-sm text-red-500">{errors.service}</p>
+                    <SelectTrigger
+                      id="service"
+                      className={errors.service ? 'border-red-500' : ''}
+                    >
+                      <SelectValue placeholder={t('form.service.placeholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="force_bridge">
+                        {t('form.service.forceBridge')}
+                      </SelectItem>
+                      <SelectItem value="godwoken">
+                        {t('form.service.godwoken')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.service && (
+                    <p className="text-sm text-red-500">{errors.service}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="walletAddress">
+                    {t('form.walletAddress.label')} <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="walletAddress"
+                    type="text"
+                    placeholder={t('form.walletAddress.placeholder')}
+                    value={walletAddress}
+                    onChange={(e) => setWalletAddress(e.target.value)}
+                    disabled={loading}
+                    className={errors.walletAddress ? 'border-red-500' : ''}
+                  />
+                  {errors.walletAddress && (
+                    <p className="text-sm text-red-500">{errors.walletAddress}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="additionalNotes">
+                    {t('form.additionalNotes.label')}
+                  </Label>
+                  <Textarea
+                    id="additionalNotes"
+                    placeholder={t('form.additionalNotes.placeholder')}
+                    value={additionalNotes}
+                    onChange={(e) => setAdditionalNotes(e.target.value)}
+                    disabled={loading}
+                    rows={4}
+                  />
+                </div>
+
+                {error && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                    <p className="text-sm text-red-800 dark:text-red-200">
+                      {t('form.submit.error')}
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                      {error.message}
+                    </p>
+                  </div>
                 )}
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="walletAddress">
-                  {t('form.walletAddress.label')} <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="walletAddress"
-                  type="text"
-                  placeholder={t('form.walletAddress.placeholder')}
-                  value={walletAddress}
-                  onChange={(e) => setWalletAddress(e.target.value)}
-                  disabled={loading}
-                  className={errors.walletAddress ? 'border-red-500' : ''}
-                />
-                {errors.walletAddress && (
-                  <p className="text-sm text-red-500">{errors.walletAddress}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="additionalNotes">
-                  {t('form.additionalNotes.label')}
-                </Label>
-                <Textarea
-                  id="additionalNotes"
-                  placeholder={t('form.additionalNotes.placeholder')}
-                  value={additionalNotes}
-                  onChange={(e) => setAdditionalNotes(e.target.value)}
-                  disabled={loading}
-                  rows={4}
-                />
-              </div>
-
-              {successMessage && (
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                  <p className="text-sm text-green-800 dark:text-green-200">
-                    {successMessage}
-                  </p>
-                </div>
-              )}
-
-              {errorMessage && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                  <p className="text-sm text-red-800 dark:text-red-200">
-                    {errorMessage}
-                  </p>
-                </div>
-              )}
-
-              {googleSheetsError && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                  <p className="text-sm text-red-800 dark:text-red-200">
-                    {t('form.submit.error')}
-                  </p>
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                    {googleSheetsError}
-                  </p>
-                </div>
-              )}
-
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? t('form.submit.submitting') : t('form.submit.button')}
-              </Button>
-            </form>
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? t('form.submit.submitting') : t('form.submit.button')}
+                </Button>
+              </form>
             )}
           </CardContent>
         </Card>

@@ -24,5 +24,5 @@ export interface FormSubmissionData {
   service: string;
   walletAddress: string;
   additionalNotes: string;
-  timestamp: string;
+  // timestamp: string;
 }
