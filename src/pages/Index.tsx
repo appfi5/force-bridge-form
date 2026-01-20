@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,7 +26,7 @@ export function IndexPage() {
 
   const { loading, data: isSubmitted, run: appendData, error } = useRequest(async (values: FormSubmissionData) => {
     const scriptUrl = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
-    if(!scriptUrl) {
+    if (!scriptUrl) {
       throw new Error('Google Sheets script URL is not defined.');
     }
     const response = await fetch(scriptUrl, {
